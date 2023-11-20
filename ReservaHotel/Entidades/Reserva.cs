@@ -5,11 +5,18 @@ namespace ReservaHotel.Entidades
 {
     public class Reserva
     {
-        public int Id { get; set; }
+        public int ReservaId { get; set; }
 
         public int HotelId { get; set; }
 
         public int HabitacionId { get; set; }
+
+        [Required]
+        [DataType(DataType.Date)]
+        public DateTime FechaReserva { get; set; }
+        [Required]
+        [DataType(DataType.Date)]
+        public DateTime ClienteFechaNacimiento { get; set; }
 
         [Required]
         [DataType(DataType.Date)]
@@ -19,9 +26,9 @@ namespace ReservaHotel.Entidades
         [DataType(DataType.Date)]
         public DateTime FechaSalida { get; set; }
 
-        [Required]
-        [Range(1, int.MaxValue, ErrorMessage = "La cantidad de personas debe ser al menos 1.")]
-        public int CantidadPersonas { get; set; }
+       [Required]
+       [Range(1, int.MaxValue, ErrorMessage = "La cantidad de personas debe ser al menos 1.")]
+       public int CantidadPersonas { get; set; }
 
         [Required]
         [EmailAddress(ErrorMessage = "El correo electrónico del cliente no es válido.")]
@@ -35,9 +42,7 @@ namespace ReservaHotel.Entidades
         [MaxLength(100, ErrorMessage = "El apellido del cliente no puede superar los 100 caracteres.")]
         public string ?ClienteApellido { get; set; }
 
-        [Required]
-        [DataType(DataType.Date)]
-        public DateTime ClienteFechaNacimiento { get; set; }
+       
 
         [Required]
         [MaxLength(10, ErrorMessage = "El género del cliente no puede superar los 10 caracteres.")]
@@ -61,9 +66,10 @@ namespace ReservaHotel.Entidades
 
         [Required]
         [MaxLength(15, ErrorMessage = "El teléfono del contacto de emergencia no puede superar los 15 caracteres.")]
-        public string ?ContactoEmergenciaTelefono { get; set; }
+        public string ?TelefonoEmergenciaTelefono { get; set; }
 
         public virtual Habitacion ?Habitacion { get; set; }
+        public bool EsTitular { get; set; }
     }
 }
 

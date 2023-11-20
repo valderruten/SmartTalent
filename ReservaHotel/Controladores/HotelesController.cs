@@ -19,11 +19,11 @@ namespace ReservaHotel.Controllers
         }
 
          
-        [HttpGet]
+        [HttpGet("ListarHoteles")]
         public async Task<ActionResult<IEnumerable<Hotel>>> GetHoteles()
         {
             var hotelesEntidad = await _dbContext.Hoteles
-                .Include(h => h.Habitaciones) // Esto incluirá las habitaciones relacionadas en la consulta
+                .Include(h => h.Habitaciones)  
                 .ToListAsync();
 
             var hotelesModelo = _mapper.Map<IEnumerable<Hotel>>(hotelesEntidad);
@@ -31,12 +31,12 @@ namespace ReservaHotel.Controllers
         }
 
 
-        [HttpGet("{id}")]
+        [HttpGet("{id}/ListarHotel")]
         public async Task<ActionResult<Hotel>> GetHotel(int id)
         {
             var hotel = await _dbContext.Hoteles
         .Include(h => h.Habitaciones)
-        .FirstOrDefaultAsync(h => h.Id == id);
+        .FirstOrDefaultAsync(h => h.HotelId == id);
 
             if (hotel == null)
             {
@@ -46,7 +46,7 @@ namespace ReservaHotel.Controllers
             return Ok(hotel);
         }
 
-        [HttpPost]
+        [HttpPost("CrearHotel")]
         public async Task<ActionResult<Hotel>> CreateHotel(Hotel hotelModelo)
         {
             
@@ -72,7 +72,7 @@ namespace ReservaHotel.Controllers
 
         }
 
-        [HttpPut("{id}")]
+        [HttpPut("{id}/EditarHotel")]
         public async Task<IActionResult> UpdateHotel(int id, Hotel hotelModelo)
         {
             if (id != hotelModelo.Id)
@@ -108,8 +108,8 @@ namespace ReservaHotel.Controllers
             return NoContent();
         }
 
-        [HttpPut("{id}/habilitar")]
-        public async Task<IActionResult> ToggleHotelStatus(int id)
+        [HttpPut("{id}/HabilitarHotel")]
+        public async Task<IActionResult> HabilitarHotel(int id)
         {
             var hotel = await _dbContext.Hoteles.FindAsync(id);
 
@@ -118,16 +118,133 @@ namespace ReservaHotel.Controllers
                 return NotFound("Hotel no encontrado.");
             }
 
-            hotel.Habilitado = !hotel.Habilitado;
-            await _dbContext.SaveChangesAsync();
+            if (hotel.Activo)
+            {
+                return BadRequest("El hotel ya está habilitado.");
+            }
+
+            hotel.Activo = true;
+
+            try
+            {
+                await _dbContext.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!HotelExists(id))
+                {
+                    return NotFound("Hotel no encontrado.");
+                }
+                else
+                {
+                    throw;
+                }
+            }
 
             return NoContent();
         }
-         
 
-        private bool HotelExists(int id)
+        [HttpPut("{id}/DeshabilitarHotel")]
+        public async Task<IActionResult> DeshabilitarHotel(int id)
         {
-            return _dbContext.Hoteles.Any(e => e.Id == id);
+            var hotel = await _dbContext.Hoteles.FindAsync(id);
+
+            if (hotel == null)
+            {
+                return NotFound("Hotel no encontrado.");
+            }
+
+            if (!hotel.Activo)
+            {
+                return BadRequest("El hotel ya está deshabilitado.");
+            }
+
+            hotel.Activo = false;
+
+            try
+            {
+                await _dbContext.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!HotelExists(id))
+                {
+                    return NotFound("Hotel no encontrado.");
+                }
+                else
+                {
+                    throw;
+                }
+            }
+
+            return NoContent();
         }
+        // Endpoint para obtener todas las habitaciones disponibles para asignar a un hotel
+        [HttpGet("habitaciones-disponibles")]
+        public async Task<ActionResult<IEnumerable<Habitacion>>> ObtenerHabitacionesDisponibles()
+        {
+            var habitacionesDisponibles = await _dbContext.Habitaciones
+                .Where(h => h.HotelId == null) // Filtrar habitaciones no asignadas a un hotel
+                .ToListAsync();
+
+            var habitacionesModelo = _mapper.Map<List<Habitacion>>(habitacionesDisponibles);
+            return habitacionesModelo;
+        }
+
+        // Endpoint para asignar una habitación a un hotel
+        [HttpPost("{hotelId}/asignar-habitacion/{habitacionId}")]
+        public async Task<IActionResult> AsignarHabitacionAHotel(int hotelId, int habitacionId)
+        {
+            var hotel = await _dbContext.Hoteles.FindAsync(hotelId);
+            var habitacion = await _dbContext.Habitaciones.FindAsync(habitacionId);
+
+            if (hotel == null || habitacion == null)
+            {
+                return NotFound("Hotel o habitación no encontrados.");
+            }
+
+            if (habitacion.HotelId == hotelId)
+            {
+                return BadRequest("La habitación ya está asignada a este hotel.");
+            }
+
+            if (habitacion.HotelId != null)
+            {
+                var otroHotel = await _dbContext.Hoteles.FindAsync(habitacion.HotelId);
+                return BadRequest($"La habitación está asignada al hotel '{otroHotel?.Nombre}'.");
+            }
+
+            habitacion.HotelId = hotelId;
+
+            try
+            {
+                await _dbContext.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!HotelExists(hotelId) || !HabitacionExists(habitacionId))
+                {
+                    return NotFound("Hotel o habitación no encontrados.");
+                }
+                else
+                {
+                    throw;
+                }
+            }
+
+            return Ok($"La habitación fue asignada exitosamente al hotel '{hotel.Nombre}'.");
+        }
+
+
+        private bool HotelExists(int hotelId)
+        {
+            return _dbContext.Hoteles.Any(h => h.HotelId == hotelId);
+        }
+
+        private bool HabitacionExists(int habitacionId)
+        {
+            return _dbContext.Habitaciones.Any(h => h.Id == habitacionId);
+        }
+
     }
 }

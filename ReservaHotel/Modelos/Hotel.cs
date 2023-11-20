@@ -14,9 +14,8 @@ namespace ReservaHotel.Modelos
         [MaxLength(255, ErrorMessage = "La ubicación del hotel no puede superar los 255 caracteres.")]
         public string? Ubicacion { get; set; }
 
-        public bool Habilitado { get; set; }
-
-        //public List<Habitacion> Habitaciones { get; set; }
+        public bool Activo { get; set; }
+ 
 
     }
 }

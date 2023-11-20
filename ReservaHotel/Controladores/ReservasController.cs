@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using ReservaHotel.Modelos;
- 
+using ReservaHotel.Entidades;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace ReservaHotel.Controllers
 {
@@ -15,80 +17,149 @@ namespace ReservaHotel.Controllers
         {
             _dbContext = dbContext;
         }
-        [HttpGet]
+
+        [HttpGet("MostrarReservas")]
         public IActionResult ObtenerTodasLasReservas()
         {
             var reservas = _dbContext.Reservas.ToList();
-                      
             return Ok(reservas);
         }
-        [HttpPost]
-        public async Task<IActionResult> CrearReserva([FromBody] Reserva reservaInput)
+
+        [HttpPost("CrearReserva")]
+        public async Task<IActionResult> CrearReserva([FromBody] ReservaInput reservaInput)
         {
             if (reservaInput == null)
             {
                 return BadRequest("Datos de reserva no válidos.");
             }
 
-            // Validación de fechas
             if (reservaInput.FechaEntrada >= reservaInput.FechaSalida)
             {
                 return BadRequest("La fecha de entrada debe ser anterior a la fecha de salida.");
             }
 
-            // Validación de disponibilidad de habitaciones
-            if (!HabitacionDisponible(reservaInput.HabitacionId, reservaInput.FechaEntrada, reservaInput.FechaSalida))
+            var disponibilidadHabitacion = HabitacionDisponible(reservaInput.HabitacionId, reservaInput.FechaEntrada, reservaInput.FechaSalida);
+            if (disponibilidadHabitacion != "La habitación está disponible.")
             {
-                return BadRequest("La habitación seleccionada no está disponible para las fechas elegidas.");
+                return BadRequest(disponibilidadHabitacion);
             }
 
-            // Asegúrate de que el hotel y la habitación estén activos antes de crear la reserva
-            var hotel = await _dbContext.Hoteles.FirstOrDefaultAsync(h => h.Id == reservaInput.HotelId);
-            var habitacion = await _dbContext.Habitaciones.FirstOrDefaultAsync(h => h.Id == reservaInput.HabitacionId);
+            var habitacion = await _dbContext.Habitaciones.FirstOrDefaultAsync(h => h.Id == reservaInput.HabitacionId && h.HotelId == reservaInput.HotelId);
 
-            if (hotel == null || habitacion == null || !hotel.Habilitado || !habitacion.Habilitada)
+            if (habitacion == null)
             {
-                return BadRequest("El hotel o la habitación no están disponibles o no existen.");
+                var habitacionAsignada = await _dbContext.Habitaciones.FindAsync(reservaInput.HabitacionId);
+                var hotelAsignado = await _dbContext.Hoteles.FindAsync(habitacionAsignada?.HotelId);
+
+                return BadRequest($"La habitación está asignada al hotel '{hotelAsignado?.Nombre}'.");
             }
 
-            var reservaEntidad = new ReservaHotel.Entidades.Reserva
+            var hotel = await _dbContext.Hoteles.FirstOrDefaultAsync(h => h.HotelId == reservaInput.HotelId);
+            if (hotel == null || !hotel.Activo)
+            {
+                return BadRequest("El hotel no está disponible o no existe.");
+            }
+
+            if (reservaInput.EsTitular && reservaInput.CantidadPersonas <= 0)
+            {
+                return BadRequest("Si es titular, debe especificar una cantidad de personas mayor a 0.");
+            }
+
+            if (!reservaInput.EsTitular && reservaInput.CantidadPersonas != 1)
+            {
+                reservaInput.CantidadPersonas = 1;
+            }
+
+            var reservasEnEsaHabitacion = await _dbContext.Reservas
+                .Where(r => r.HabitacionId == reservaInput.HabitacionId &&
+                            r.FechaEntrada < reservaInput.FechaSalida &&
+                            r.FechaSalida > reservaInput.FechaEntrada)
+                .ToListAsync();
+
+            int cantidadPersonasReservadas = reservasEnEsaHabitacion.Sum(r => r.CantidadPersonas);
+            int totalPersonas = cantidadPersonasReservadas + reservaInput.CantidadPersonas;
+
+            if (totalPersonas > habitacion.CapacidadPersonas)
+            {
+                return BadRequest($"La habitación permite un máximo de '{habitacion.CapacidadPersonas}' personas.");
+            }
+
+            if (reservasEnEsaHabitacion.Count == 0)
+            {
+                habitacion.EstaOcupada = true;
+                await _dbContext.SaveChangesAsync();
+            }
+
+            var reservaEntidad = new Reserva
             {
                 HotelId = reservaInput.HotelId,
                 HabitacionId = reservaInput.HabitacionId,
+                FechaReserva = reservaInput.FechaReserva,
                 FechaEntrada = reservaInput.FechaEntrada,
                 FechaSalida = reservaInput.FechaSalida,
-                CantidadPersonas = reservaInput.CantidadPersonas,
-                ClienteEmail = reservaInput.ClienteEmail,
                 ClienteNombre = reservaInput.ClienteNombre,
                 ClienteApellido = reservaInput.ClienteApellido,
-                ClienteFechaNacimiento = reservaInput.FechaNacimiento,
-                ClienteGenero = reservaInput.Genero,
-                ClienteTipoDocumento = reservaInput.TipoDocumento,
-                ClienteNumeroDocumento = reservaInput.NumeroDocumento,
-                ClienteTelefonoContacto = reservaInput.TelefonoContacto,
-                ContactoEmergenciaNombre = reservaInput.ContactoEmergenciaNombres,
-                ContactoEmergenciaTelefono = reservaInput.ContactoEmergenciaTelefono
+                ClienteGenero = reservaInput.ClienteGenero,
+                ClienteFechaNacimiento = reservaInput.ClienteFechaNacimiento,
+                ClienteTipoDocumento = reservaInput.ClienteTipoDocumento,
+                ClienteNumeroDocumento = reservaInput.ClienteNumeroDocumento,
+                ClienteEmail = reservaInput.ClienteEmail,
+                ClienteTelefonoContacto = reservaInput.ClienteTelefonoContacto,
+                ContactoEmergenciaNombre = reservaInput.ContactoEmergenciaNombre,
+                TelefonoEmergenciaTelefono = reservaInput.TelefonoEmergenciaTelefono,
+                EsTitular = reservaInput.EsTitular,
+                CantidadPersonas = reservaInput.CantidadPersonas
             };
 
-            // Añadir la reserva a la base de datos.
             _dbContext.Reservas.Add(reservaEntidad);
             await _dbContext.SaveChangesAsync();
 
-            return NoContent(); // Respuesta 204 (No Content) ya que no se retorna la reserva creada.
+            return Ok("Reserva realizada con éxito.");
         }
 
-        private bool HabitacionDisponible(int habitacionId, DateTime fechaEntrada, DateTime fechaSalida)
+        private string HabitacionDisponible(int habitacionId, DateTime fechaEntrada, DateTime fechaSalida)
         {
-            // verificación de disponibilidad
-            var reservasExistentes = _dbContext.Reservas
-                .Where(r => r.HabitacionId == habitacionId &&
-                            !(r.FechaSalida <= fechaEntrada || r.FechaEntrada >= fechaSalida))
-                .ToList();
+            var habitacion = _dbContext.Habitaciones
+                .FirstOrDefault(h => h.Id == habitacionId && h.EstaOcupada);
 
+            if (habitacion != null)
+            {
+                var reservasExistentes = _dbContext.Reservas
+                    .Where(r => r.HabitacionId == habitacionId &&
+                                !(r.FechaSalida <= fechaEntrada || r.FechaEntrada >= fechaSalida))
+                    .ToList();
 
-            return reservasExistentes.Count == 0;
+                int cantidadPersonasReservadas = reservasExistentes.Sum(r => r.CantidadPersonas);
+                int totalPersonas = cantidadPersonasReservadas + 1; // Se suma 1 por la nueva reserva
+
+                if (totalPersonas > habitacion.CapacidadPersonas)
+                {
+                    return "Lo sentimos, la habitación ya está llena para las fechas seleccionadas.";
+                }
+            }
+
+            return "La habitación está disponible.";
         }
+    }
 
-
+    public class ReservaInput
+    {
+        public int HotelId { get; set; }
+        public int HabitacionId { get; set; }
+        public DateTime FechaReserva { get; set; }
+        public DateTime FechaEntrada { get; set; }
+        public DateTime FechaSalida { get; set; }
+        public string? ClienteNombre { get; set; }
+        public string? ClienteApellido { get; set; }
+        public string? ClienteGenero { get; set; }
+        public DateTime ClienteFechaNacimiento { get; set; }
+        public string? ClienteTipoDocumento { get; set; }
+        public string? ClienteNumeroDocumento { get; set; }
+        public string? ClienteEmail { get; set; }
+        public string? ClienteTelefonoContacto { get; set; }
+        public string? ContactoEmergenciaNombre { get; set; }
+        public string? TelefonoEmergenciaTelefono { get; set; }
+        public bool EsTitular { get; set; }
+        public int CantidadPersonas { get; set; }
     }
 }

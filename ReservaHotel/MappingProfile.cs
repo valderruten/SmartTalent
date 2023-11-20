@@ -8,7 +8,7 @@ public class MappingProfile : Profile
         CreateMap<ReservaHotel.Entidades.Hotel, ReservaHotel.Modelos.Hotel>()
             .ForMember(dest => dest.Nombre, opt => opt.MapFrom(src => src.Nombre))
             //.ForMember(dest => dest.Habitaciones, opt => opt.MapFrom(src => src.Habitaciones))
-            .ForMember(dest => dest.Habilitado, opt => opt.MapFrom(src => src.Habilitado))
+            .ForMember(dest => dest.Activo, opt => opt.MapFrom(src => src.Activo))
             .ForMember(dest => dest.Ubicacion, opt => opt.MapFrom(src => src.Ubicacion));
 
         // Mapeo de la entidad Habitacion a su correspondiente modelo
@@ -17,8 +17,9 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.CostoBase, opt => opt.MapFrom(src => src.CostoBase))
             .ForMember(dest => dest.Impuestos, opt => opt.MapFrom(src => src.Impuestos))
             .ForMember(dest => dest.Ubicacion, opt => opt.MapFrom(src => src.Ubicacion))
-            .ForMember(dest => dest.HotelId, opt => opt.MapFrom(src => src.HotelId))
-            .ForMember(dest => dest.Habilitada, opt => opt.MapFrom(src => src.Habilitada));
+            //  .ForMember(dest => dest.HotelId, opt => opt.MapFrom(src => src.HotelId))
+            .ForMember(dest => dest.Activo, opt => opt.MapFrom(src => src.Activo))
+            .ForMember(dest => dest.CapacidadPersonas, opt => opt.Ignore()); // Ignorando mapeo de CapacidadPersonas;
         CreateMap<ReservaHotel.Entidades.Habitacion, ReservaHotel.Modelos.Habitacion>();
         CreateMap<ReservaHotel.Modelos.Habitacion, ReservaHotel.Entidades.Habitacion>();
         CreateMap<ReservaHotel.Entidades.Hotel, ReservaHotel.Modelos.Hotel>();
