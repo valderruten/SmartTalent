@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ReservaHotel.Modelos;
+using System.Text.Json;
 
 namespace ReservaHotel.Controllers
 {
@@ -23,15 +24,17 @@ namespace ReservaHotel.Controllers
         public async Task<ActionResult<IEnumerable<Hotel>>> GetHoteles()
         {
             var hotelesEntidad = await _dbContext.Hoteles
-                .Include(h => h.Habitaciones)  
+                .Include(h => h.Habitaciones)
                 .ToListAsync();
 
-            var hotelesModelo = _mapper.Map<IEnumerable<Hotel>>(hotelesEntidad);
+            var hotelesModelo = _mapper.Map<IEnumerable<ReservaHotel.Modelos.Hotel>>(hotelesEntidad);
             return Ok(hotelesModelo);
         }
+         
 
 
         [HttpGet("{id}/ListarHotel")]
+      
         public async Task<ActionResult<Hotel>> GetHotel(int id)
         {
             var hotel = await _dbContext.Hoteles
